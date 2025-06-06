@@ -8,15 +8,13 @@
 #define MAX_VAL_LEN 100
 #define MAX_LINE_LEN 200
 
-typedef struct
-{
+typedef struct {
     time_t timestamp;
     char id_sensor[MAX_ID_LEN];
     char valor[MAX_VAL_LEN];
 } Leitura;
 
-time_t converter_para_timestamp(int dia, int mes, int ano, int hora, int min, int seg)
-{
+time_t converter_para_timestamp(int dia, int mes, int ano, int hora, int min, int seg) {
     struct tm t;
     t.tm_year = ano - 1900;
     t.tm_mon = mes - 1;
@@ -26,191 +24,141 @@ time_t converter_para_timestamp(int dia, int mes, int ano, int hora, int min, in
     t.tm_sec = seg;
     t.tm_isdst = -1;
     time_t timestamp = mktime(&t);
-    if (timestamp == -1)
-    {
-        printf("Data invalida. Tente novamente.\n");
-    }
     return timestamp;
 }
 
-int busca_binaria_proxima(Leitura leituras[], int num_leituras, time_t target_ts)
-{
-    if (num_leituras == 0)
-        return -1;
-    if (num_leituras == 1)
-        return 0;
+// Encontra o indice da leitura com timestamp mais proximo usando busca binaria.
+int busca_binaria_proxima(Leitura leituras[], int num_leituras, time_t target_ts) {
+    if (num_leituras == 0) return -1;
 
     int baixo = 0, alto = num_leituras - 1;
-    int idx_mais_proximo = -1;
-    long diff_minima = LONG_MAX;
+    int idx_mais_proximo = 0; 
 
-    if (target_ts <= leituras[0].timestamp)
-        return 0;
-    if (target_ts >= leituras[num_leituras - 1].timestamp)
-        return num_leituras - 1;
-
-    while (baixo <= alto)
-    {
+    while (baixo <= alto) {
         int meio = baixo + (alto - baixo) / 2;
-        long diff_atual = leituras[meio].timestamp - target_ts;
-        if (diff_atual < 0)
-            diff_atual = -diff_atual;
+        
+        long diff_meio = labs(leituras[meio].timestamp - target_ts);
+        long diff_proximo = labs(leituras[idx_mais_proximo].timestamp - target_ts);
 
-        if (diff_atual < diff_minima)
-        {
-            diff_minima = diff_atual;
+        if (diff_meio < diff_proximo) {
             idx_mais_proximo = meio;
-        }
-        else if (diff_atual == diff_minima)
-        {
-            if (leituras[meio].timestamp < leituras[idx_mais_proximo].timestamp)
-            {
+        } else if (diff_meio == diff_proximo) {
+            if (leituras[meio].timestamp < leituras[idx_mais_proximo].timestamp) {
                 idx_mais_proximo = meio;
             }
         }
-
-        if (leituras[meio].timestamp < target_ts)
-        {
+        
+        if (leituras[meio].timestamp < target_ts) {
             baixo = meio + 1;
-        }
-        else if (leituras[meio].timestamp > target_ts)
-        {
+        } else if (leituras[meio].timestamp > target_ts) {
             alto = meio - 1;
-        }
-        else
-        {
-            return meio;
-        }
-    }
-
-    if (alto >= 0)
-    { 
-        long diff = target_ts - leituras[alto].timestamp;
-        if (diff < 0)
-            diff = -diff;
-        if (diff < diff_minima)
-        {
-            diff_minima = diff;
-            idx_mais_proximo = alto;
-        }
-        else if (diff == diff_minima && leituras[alto].timestamp < leituras[idx_mais_proximo].timestamp)
-        {
-            idx_mais_proximo = alto;
-        }
-    }
-
-    if (baixo < num_leituras)
-    { 
-        long diff = leituras[baixo].timestamp - target_ts;
-        if (diff < 0)
-            diff = -diff;
-        if (diff < diff_minima)
-        {
-            idx_mais_proximo = baixo;
-        }
-        else if (diff == diff_minima && leituras[baixo].timestamp < leituras[idx_mais_proximo].timestamp)
-        {
-            idx_mais_proximo = baixo;
+        } else {
+            return meio; 
         }
     }
     return idx_mais_proximo;
 }
 
-int main(int argc, char *argv[])
-{
-    if (argc != 8)
-    {
-        printf("Uso: %s <NOME_SENSOR> <ano> <mes> <dia> <hora> <min> <seg>\n", argv[0]);
-        printf("Exemplo: %s TEMP 2024 01 15 10 30 00\n", argv[0]);
+// le argumentos, valida, busca e exibe a leitura mais proxima.
+int main(int argc, char *argv[]) {
+    // Valida o numero de argumentos
+    if (argc != 8) {
+        printf("O correto seria: %s <NOME_SENSOR> <ano> <mes> <dia> <hora> <min> <seg>\n", argv[0]);
+        printf("Exemplo: %s TEMP 2024 6 1 10 30 00\n", argv[0]);
+        return 1;
+    }
+
+    // Valida se a DATA e HORA fornecidas existem
+    struct tm tm_alvo = {0};
+    int ano = atoi(argv[2]);
+    int mes = atoi(argv[3]);
+    int dia = atoi(argv[4]);
+    
+    tm_alvo.tm_year = ano - 1900;
+    tm_alvo.tm_mon = mes - 1;
+    tm_alvo.tm_mday = dia;
+    tm_alvo.tm_hour = atoi(argv[5]);
+    tm_alvo.tm_min = atoi(argv[6]);
+    tm_alvo.tm_sec = atoi(argv[7]);
+    tm_alvo.tm_isdst = -1;
+
+    time_t target_ts = mktime(&tm_alvo);
+    if (target_ts == -1 || tm_alvo.tm_mday != dia || tm_alvo.tm_mon != mes - 1) {
+        printf("Erro: Data ou hora de consulta invalida ou nao existente.\n");
         return 1;
     }
 
     char *sensor_nome = argv[1];
-    int ano = atoi(argv[2]);
-    int mes = atoi(argv[3]);
-    int dia = atoi(argv[4]);
-    int hora = atoi(argv[5]);
-    int min = atoi(argv[6]);
-    int seg = atoi(argv[7]);
-
-    time_t target_ts = converter_para_timestamp(dia, mes, ano, hora, min, seg);
-    if (target_ts == -1)
-    {
-        printf("Data e hora fornecidas sao invalidas.\n");
-        return 1;
-    }
-
     char filename[MAX_ID_LEN + 5];
     sprintf(filename, "%s.txt", sensor_nome);
 
     FILE *sensor_file = fopen(filename, "r");
-    if (!sensor_file)
-    {
-        printf("Erro ao abrir arquivo do sensor: %s\n", filename);
+    if (!sensor_file) {
+        printf("Erro: Nao foi possivel abrir o arquivo do sensor '%s'.\n", filename);
         perror("Detalhe do erro");
         return 1;
     }
 
+    Leitura *leituras = NULL;
     int num_leituras = 0;
+    int capacity = 0;
     char line_buffer[MAX_LINE_LEN];
-    while (fgets(line_buffer, sizeof(line_buffer), sensor_file) != NULL)
-    {
-        num_leituras++;
-    }
-    rewind(sensor_file); 
 
-    if (num_leituras == 0)
-    {
-        printf("Nenhuma leitura encontrada no arquivo do sensor %s.\n", sensor_nome);
-        fclose(sensor_file);
-        return 1;
-    }
+    while (fgets(line_buffer, sizeof(line_buffer), sensor_file) != NULL) {
+        long ts_long_temp;
+        char id_temp[MAX_ID_LEN], val_temp[MAX_VAL_LEN];
 
-    Leitura *leituras = malloc(num_leituras * sizeof(Leitura));
-    if (!leituras)
-    {
-        perror("Falha ao alocar memoria para leituras");
-        fclose(sensor_file);
-        return 1;
-    }
-
-    int i = 0;
-    long ts_long_temp; 
-    while (i < num_leituras && fscanf(sensor_file, "%ld %49s %99[^\n]",
-                                      &ts_long_temp,
-                                      leituras[i].id_sensor,
-                                      leituras[i].valor) == 3)
-    {
-        leituras[i].timestamp = (time_t)ts_long_temp;
-        i++;
+        if (sscanf(line_buffer, "%ld %49s %99[^\n]", &ts_long_temp, id_temp, val_temp) == 3) {
+            if (num_leituras >= capacity) {
+                capacity = (capacity == 0) ? 128 : capacity * 2;
+                Leitura *temp = realloc(leituras, capacity * sizeof(Leitura));
+                if (!temp) {
+                    perror("Falha ao alocar memoria");
+                    free(leituras);
+                    fclose(sensor_file);
+                    return 1;
+                }
+                leituras = temp;
+            }
+            leituras[num_leituras].timestamp = (time_t)ts_long_temp;
+            strcpy(leituras[num_leituras].id_sensor, id_temp);
+            strcpy(leituras[num_leituras].valor, val_temp);
+            num_leituras++;
+        }
     }
     fclose(sensor_file);
-    num_leituras = i; 
 
-    if (num_leituras == 0)
-    { 
-        printf("Nenhuma leitura valida encontrada no arquivo do sensor %s apos parse.\n", sensor_nome);
+    if (num_leituras == 0) {
+        printf("Nenhuma leitura valida encontrada no arquivo do sensor %s.\n", sensor_nome);
         free(leituras);
         return 1;
     }
 
+    // Valida se a data da consulta esta dentro do intervalo de dados disponiveis
+    time_t min_ts = leituras[0].timestamp;
+    time_t max_ts = leituras[num_leituras - 1].timestamp;
+
+    if (target_ts < min_ts || target_ts > max_ts) {
+        char min_str[30], max_str[30];
+        strftime(min_str, sizeof(min_str), "%Y-%m-%d %H:%M:%S", localtime(&min_ts));
+        strftime(max_str, sizeof(max_str), "%Y-%m-%d %H:%M:%S", localtime(&max_ts));
+        printf("Erro: A data de consulta esta fora do intervalo de dados disponiveis.\n");
+        printf("Intervalo disponivel para o sensor '%s': de %s ate %s.\n", sensor_nome, min_str, max_str);
+        free(leituras);
+        return 1;
+    }
+
+    //  Realiza a busca e exibe o resultado
     int closest_idx = busca_binaria_proxima(leituras, num_leituras, target_ts);
 
-    if (closest_idx != -1)
-    {
-        printf("Leitura mais proxima encontrada:\n");
-        printf("Timestamp: %ld\n", (long)leituras[closest_idx].timestamp);
-        char time_str[30];
-        struct tm *tm_info = localtime(&leituras[closest_idx].timestamp);
-        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
-        printf("Data/Hora: %s\n", time_str);
-        printf("ID Sensor: %s\n", leituras[closest_idx].id_sensor);
-        printf("Valor: %s\n", leituras[closest_idx].valor);
-    }
-    else
-    {
-        printf("Nao foi possivel encontrar uma leitura proxima para o sensor %s.\n", sensor_nome);
-    }
+    printf("Leitura mais proxima encontrada:\n");
+    printf("Timestamp: %ld\n", (long)leituras[closest_idx].timestamp);
+
+    char time_str[30];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&leituras[closest_idx].timestamp));
+    printf("Data/Hora: %s\n", time_str);
+    printf("ID Sensor: %s\n", leituras[closest_idx].id_sensor);
+    printf("Valor: %s\n", leituras[closest_idx].valor);
 
     free(leituras);
     return 0;
